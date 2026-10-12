@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>飲酒日記 集計アプリ</title>
+<style>
+* { box-sizing: border-box; }
+body { margin: 0; font-family: "Yu Gothic", "Meiryo", sans-serif; background: #f1f5f9; color: #1e293b; font-size: 15px; }
+header { background: #1e293b; color: #fff; padding: 10px 12px; position: sticky; top: 0; z-index: 5; }
+header h1 { font-size: 17px; margin: 0 0 6px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+select, button, input, textarea { font: inherit; }
+select { padding: 6px; border-radius: 6px; border: 1px solid #475569; background: #334155; color: #fff; }
+button { padding: 9px 12px; border: none; border-radius: 8px; background: #f59e0b; color: #1e293b; font-weight: 700; cursor: pointer; }
+button.sub { background: #e2e8f0; }
+main { padding: 10px; max-width: 900px; margin: 0 auto; }
+section { background: #fff; border-radius: 10px; padding: 10px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+section h2 { font-size: 15px; margin: 0 0 8px; border-left: 4px solid #f59e0b; padding-left: 8px; }
+.note { font-size: 12px; color: #64748b; }
+.thumbs { display: flex; gap: 6px; overflow-x: auto; padding: 4px 0; }
+.thumbs img { height: 90px; border-radius: 6px; border: 1px solid #cbd5e1; cursor: zoom-in; flex: none; }
+.day { border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 6px; overflow: hidden; }
+.day summary { padding: 8px 10px; cursor: pointer; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: #f8fafc; list-style: none; }
+.day.sun summary { background: #fff1f2; }
+.day.sat summary { background: #eff6ff; }
+.day .u { margin-left: auto; font-weight: 700; }
+.st { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: #e2e8f0; color: #64748b; }
+.st.drink { background: #fde68a; color: #1e293b; }
+.st.dry, .st.zero { background: #bbf7d0; color: #1e293b; }
+.over { color: #dc2626; font-weight: 700; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 10px; }
+.fields label { font-size: 12px; color: #475569; display: flex; flex-direction: column; gap: 3px; }
+.fields label.chk { flex-direction: row; align-items: center; font-size: 14px; color: #1e293b; }
+.fields label.chk input { width: 20px; height: 20px; }
+.fields input[type=number], .fields input[type=text], .fields textarea { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 16px; width: 100%; }
+.fields .wide { grid-column: 1 / -1; }
+.kpi { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.kpi div { background: #f8fafc; border-radius: 8px; padding: 8px; font-size: 12px; color: #475569; }
+.kpi b { display: block; font-size: 16px; color: #1e293b; }
+.v { padding: 6px 0; border-bottom: 1px dashed #e2e8f0; font-size: 13px; }
+.res-OK { color: #16a34a; font-weight: 700; }
+.res-NG { color: #dc2626; font-weight: 700; }
+.res-CHK { color: #b45309; font-weight: 700; }
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+th, td { border: 1px solid #94a3b8; padding: 3px 5px; text-align: center; }
+th { background: #f1f5f9; }
+td.l { text-align: left; white-space: normal; min-width: 120px; }
+tr.over td { color: #dc2626; font-weight: 700; }
+tr.sun { background: #fff5f5; }
+tr.sat { background: #eff6ff; }
+#viewer { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.9); z-index: 10; justify-content: center; align-items: center; }
+#viewer.on { display: flex; }
+#viewer img { max-width: 100%; max-height: 100%; }
+input[type=text].seq { width: 70px; padding: 5px; border-radius: 6px; border: 1px solid #cbd5e1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>飲酒日記 集計アプリ</h1>
+  <div class="row">
+    <select id="selY"></select>
+    <select id="selM"></select>
+  </div>
+  <div class="note" style="color:#cbd5e1;margin-top:4px">入力内容はこの端末のブラウザに月ごとに自動保存されます</div>
+</header>
+
+<main>
+
+<section>
+  <h2>1. 日記の写真（見比べ用）</h2>
+  <div class="row">
+    <button onclick="document.getElementById('fCam').click()">📷 撮影</button>
+    <button class="sub" onclick="document.getElementById('fLib').click()">🖼 写真を選ぶ</button>
+  </div>
+  <input type="file" id="fCam" accept="image/*" capture="environment" hidden>
+  <input type="file" id="fLib" accept="image/*" multiple hidden>
+  <div class="thumbs" id="thumbs"></div>
+  <p class="note">写真は画面で見比べるためだけに使います。どこにも送信・保存されず、ページを閉じると消えます。タップで拡大。</p>
+</section>
+
+<section>
+  <h2>2. 日別入力</h2>
+  <p class="note">空欄＝記録なし、0＝0杯として区別します。杯数は写真の記号を数えて入力してください（一＝1、T＝2、下＝3、正＝4）。</p>
+  <div id="days"></div>
+</section>
+
+<section>
+  <h2>3. 集計</h2>
+  <div class="kpi" id="kpi"></div>
+  <div id="detail" class="note" style="margin-top:8px"></div>
+</section>
+
+<section>
+  <h2>4. 検証</h2>
+  <div id="verify"></div>
+</section>
+
+<section>
+  <h2>5. 月次表・報告書</h2>
+  <div class="row">
+    <label class="note">通し番号 <input type="text" class="seq" id="seq" maxlength="4" inputmode="numeric"></label>
+    <label class="note">版 <input type="text" class="seq" id="ver" maxlength="2" inputmode="numeric" style="width:50px"></label>
+  </div>
+  <p class="note" id="fname" style="margin:6px 0"></p>
+  <div class="row" style="margin-bottom:8px">
+    <button onclick="saveReport()">📄 報告書HTMLを保存</button>
+    <button class="sub" onclick="saveJson()">JSONを保存</button>
+  </div>
+  <div class="tablewrap" id="tbl"></div>
+</section>
+
+</main>
+
+<div id="viewer" onclick="this.classList.remove('on')"><img id="viewImg" alt=""></div>
+
+<script>
+// 換算（1杯あたりユニット×100の整数。小数の誤差を避けるため）
+const RATES = [
+  { key: 'beer500',   label: 'ビール500ml',      u: 240 },
+  { key: 'beer350',   label: 'ビール350ml',      u: 160 },
+  { key: 'shochu100', label: '焼酎100ml',        u: 200 },
+  { key: 'shochu50',  label: '焼酎50ml',         u: 100 },
+  { key: 'whisky100', label: 'ウイスキー100ml',  u: 330 },
+  { key: 'whisky50',  label: 'ウイスキー50ml',   u: 170 },
+  { key: 'chu350',    label: '缶チューハイ350ml', u: 180 },
+  { key: 'sake50',    label: '日本酒50ml',       u: 55 },
+];
+const LIMIT = 840;   // 8.4ユニット（×100）
+const WEEK = ['日','月','火','水','木','金','土'];
+const STLABEL = { drink: '飲酒', dry: '休肝', zero: '0杯', blank: '記録なし', invalid: '要確認' };
+
+let Y, M, N, D;
+const today = new Date();
+Y = today.getFullYear();
+M = today.getMonth() + 1;
+
+const fmt2 = n100 => (n100 / 100).toFixed(2);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+
+function storageKey() { return `drinkdiary-app-${Y}-${M}`; }
+
+function emptyRec() {
+  const drinks = {};
+  RATES.forEach(r => drinks[r.key] = '');
+  return { dry: false, out: false, steps: '', water: '', mood: '', wt: '', fat: '', slp: '', paper: '', drinks };
+}
+
+function loadMonth() {
+  let saved = {};
+  try {
+    saved = JSON.parse(localStorage.getItem(storageKey()) || '{}');
+  } catch (e) {
+    alert('保存データを読み込めませんでした。このまま入力すると上書きされます。');
+    saved = {};
+  }
+  N = new Date(Y, M, 0).getDate();
+  D = { seq: saved.seq || '0001', ver: saved.ver || '01', days: {} };
+  for (let d = 1; d <= N; d++) {
+    const s = (saved.days && saved.days[d]) || {};
+    const r = emptyRec();
+    Object.assign(r, s);
+    r.drinks = Object.assign(emptyRec().drinks, s.drinks || {});
+    D.days[d] = r;
+  }
+}
+
+function save() { localStorage.setItem(storageKey(), JSON.stringify(D)); }
+
+// 杯数：空欄はnull（記録なし）、整数の0以上はその値、それ以外はNaN（不正）
+function parseCount(v) {
+  if (v === '' || v == null) return null;
+  const n = Number(v);
+  return (Number.isInteger(n) && n >= 0) ? n : NaN;
+}
+
+function num(v) {
+  if (v === '' || v == null) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function dayCalc(r) {
+  let u100 = 0, filled = false, invalid = false;
+  for (const k of RATES) {
+    const n = parseCount(r.drinks[k.key]);
+    if (n === null) continue;
+    filled = true;
+    if (Number.isNaN(n)) { invalid = true; continue; }
+    u100 += n * k.u;
+  }
+  const status = invalid ? 'invalid' : filled ? (u100 > 0 ? 'drink' : 'zero') : (r.dry ? 'dry' : 'blank');
+  return { u100, status, invalid, conflict: r.dry && u100 > 0 };
+}
+
+function model() {
+  const days = [];
+  let total100 = 0, drinkDays = 0, dryDays = 0, invalid = 0;
+  const blankDays = [], over = [], conflicts = [], mismatch = [], paperChecked = [];
+  let max = null;
+  const typeCnt = {};
+  RATES.forEach(k => typeCnt[k.key] = 0);
+  for (let d = 1; d <= N; d++) {
+    const r = D.days[d];
+    const c = dayCalc(r);
+    const dow = WEEK[new Date(Y, M - 1, d).getDay()];
+    days.push({ d, dow, r, ...c });
+    total100 += c.u100;
+    if (c.status === 'drink') {
+      drinkDays++;
+      if (c.u100 > LIMIT) over.push(d);
+      if (!max || c.u100 > max.u100) max = { d, u100: c.u100 };
+    } else if (c.status === 'dry' || c.status === 'zero') {
+      dryDays++;
+    } else if (c.status === 'blank') {
+      blankDays.push(d);
+    }
+    if (c.invalid) invalid++;
+    if (c.conflict) conflicts.push(d);
+    RATES.forEach(k => {
+      const n = parseCount(r.drinks[k.key]);
+      if (n && n > 0) typeCnt[k.key] += n;
+    });
+    const pv = num(r.paper);
+    if (pv !== null) {
+      paperChecked.push(d);
+      const paper100 = Math.round(pv * 100);
+      if (paper100 !== c.u100) mismatch.push({ d, paper100, calc100: c.u100, diff100: paper100 - c.u100 });
+    }
+  }
+  const avg = arr => arr.length ? arr.reduce((a, b) => a + b, 0) / arr.length : null;
+  const steps = days.map(x => num(x.r.steps)).filter(v => v !== null);
+  const sleep = days.map(x => num(x.r.slp)).filter(v => v !== null);
+  const wt = days.filter(x => num(x.r.wt) !== null).map(x => ({ d: x.d, v: num(x.r.wt) }));
+  const fat = days.filter(x => num(x.r.fat) !== null).map(x => ({ d: x.d, v: num(x.r.fat) }));
+  return {
+    days, total100, drinkDays, dryDays, invalid, blankDays, over, conflicts, mismatch, paperChecked, max, typeCnt, n: N,
+    avgSteps: avg(steps), avgSleep: avg(sleep), wt, fat,
+  };
+}
+
+function pairText(list, unit) {
+  if (!list.length) return '—';
+  const a = list[0], b = list[list.length - 1];
+  return `${a.v}${unit}（${a.d}日）→ ${b.v}${unit}（${b.d}日）`;
+}
+
+function summaryItems(m) {
+  return [
+    ['飲酒日数', m.drinkDays + '日'],
+    ['休肝日数', m.dryDays + '日'],
+    ['記録なし日数', m.blankDays.length + '日'],
+    ['月間合計ユニット', fmt2(m.total100)],
+    ['飲酒日の平均', m.drinkDays ? fmt2(m.total100 / m.drinkDays) : '—'],
+    ['暦日平均（÷月の日数）', fmt2(m.total100 / m.n)],
+    ['8.4超過日数', m.over.length + '日'],
+    ['最大飲酒日', m.max ? `${m.max.d}日 ${fmt2(m.max.u100)}` : '—'],
+    ['平均歩数（記録日）', m.avgSteps === null ? '—' : Math.round(m.avgSteps).toLocaleString()],
+    ['平均睡眠（記録日）', m.avgSleep === null ? '—' : m.avgSleep.toFixed(1) + 'H'],
+    ['体重 初回→最終', pairText(m.wt, 'kg')],
+    ['脂肪 初回→最終', pairText(m.fat, '%')],
+  ];
+}
+
+function drinkTotalsText(m) {
+  return RATES.map(k => `${k.label} ${m.typeCnt[k.key]}`).join(' ／ ');
+}
+
+function verifyItems(m) {
+  const list = [];
+  const complete = m.days.length === m.n && m.days.every((x, i) => x.d === i + 1);
+  list.push({ n: '1. 行数（1日〜月末）', r: complete ? 'OK' : 'NG', t: `${m.days.length}/${m.n}日分` });
+  list.push({ n: '2. 入力値の不正（整数でない杯数）', r: m.invalid ? 'CHK' : 'OK', t: m.invalid ? `${m.invalid}日に要確認の値あり` : 'なし' });
+  list.push({ n: '3. 記録なし日（欠損か要確認）', r: m.blankDays.length ? 'CHK' : 'OK', t: m.blankDays.length ? `${m.blankDays.join(', ')}日` : 'なし' });
+  const recalc100 = RATES.reduce((s, k) => s + m.typeCnt[k.key] * k.u, 0);
+  list.push({ n: '4. 再計算（飲料別の本数×換算値の和）', r: recalc100 === m.total100 ? 'OK' : 'NG', t: `${fmt2(recalc100)}（日別合計 ${fmt2(m.total100)}）` });
+  if (!m.paperChecked.length) {
+    list.push({ n: '5. 手書き合計との突合', r: 'CHK', t: '手書き合計が未入力のため突合していません' });
+  } else if (m.mismatch.length) {
+    list.push({ n: '5. 手書き合計との突合', r: 'NG', t: m.mismatch.map(x => `${x.d}日 手書き${fmt2(x.paper100)}／計算${fmt2(x.calc100)}（差 ${fmt2(x.diff100)}）`).join(' / ') });
+  } else {
+    list.push({ n: '5. 手書き合計との突合', r: 'OK', t: `${m.paperChecked.length}日分一致` });
+  }
+  list.push({ n: '6. 休肝日フラグと飲酒量の矛盾', r: m.conflicts.length ? 'CHK' : 'OK', t: m.conflicts.length ? `${m.conflicts.join(', ')}日` : 'なし' });
+  list.push({ n: '7. 平均の定義', r: 'OK', t: '飲酒日の平均＝合計÷飲酒日数／暦日平均＝合計÷月の日数' });
+  return list;
+}
+
+const RESLABEL = { OK: 'OK', NG: '差異あり', CHK: '要確認' };
+
+function tableHTML(m) {
+  const head = ['日', '曜', '歩数', '休肝', '外飲', ...RATES.map(k => k.label), '合計', '体重', '脂肪', '睡眠', '気分・行動・出来事'];
+  let body = '';
+  m.days.forEach(x => {
+    const r = x.r;
+    const cls = [x.dow === '日' ? 'sun' : x.dow === '土' ? 'sat' : '', x.status === 'drink' && x.u100 > LIMIT ? 'over' : ''].join(' ').trim();
+    const dry = (x.status === 'dry' || x.status === 'zero') ? '○' : '';
+    const sumText = x.status === 'blank' ? '記録なし' : x.status === 'invalid' ? '要確認' : fmt2(x.u100);
+    body += `<tr class="${cls}"><td>${x.d}</td><td>${x.dow}</td><td>${esc(r.steps)}</td><td>${dry}</td><td>${r.out ? '○' : ''}</td>`
+      + RATES.map(k => `<td>${esc(r.drinks[k.key])}</td>`).join('')
+      + `<td>${sumText}</td><td>${esc(r.wt)}</td><td>${esc(r.fat)}</td><td>${esc(r.slp)}</td><td class="l">${esc(r.mood)}</td></tr>`;
+  });
+  return `<table><thead><tr>${head.map(h => `<th>${h}</th>`).join('')}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+function fileName(content, ext) {
+  const t = new Date();
+  const ymd = `${t.getFullYear()}${pad(t.getMonth() + 1)}${pad(t.getDate())}`;
+  return `${D.seq}_${Y}年${M}月${content}_${ymd}_v${D.ver}.${ext}`;
+}
+
+function validNames() {
+  if (!/^\d{4}$/.test(D.seq)) { alert('通し番号は4桁の数字で入力してください'); return false; }
+  if (!/^\d{2}$/.test(D.ver)) { alert('版は2桁の数字で入力してください（例：01）'); return false; }
+  return true;
+}
+
+function download(name, text, type) {
+  const blob = new Blob(['\uFEFF' + text], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+function reportHTML(m) {
+  const title = `${Y}年${M}月 飲酒日記 月次報告`;
+  const kpi = summaryItems(m).map(([a, b]) => `<div><small>${esc(a)}</small><b>${esc(b)}</b></div>`).join('');
+  const verify = verifyItems(m).map(v => `<div class="v"><span class="res-${v.r}">[${RESLABEL[v.r]}]</span> ${esc(v.n)}：${esc(v.t)}</div>`).join('');
+  return `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8"><title>${esc(title)}</title>
+<style>
+@page { size: A4 landscape; margin: 8mm; }
+body { font-family: "Yu Gothic", "Meiryo", sans-serif; font-size: 10pt; color: #1e293b; margin: 0; padding: 8px; }
+h1 { font-size: 15pt; margin: 0 0 4px; border-bottom: 2px solid #1e293b; padding-bottom: 3px; }
+h2 { font-size: 11pt; margin: 10px 0 4px; border-left: 4px solid #f59e0b; padding-left: 6px; }
+.kpi { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
+.kpi div { border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px; font-size: 8pt; color: #475569; }
+.kpi b { display: block; font-size: 11pt; color: #1e293b; }
+table { border-collapse: collapse; width: 100%; font-size: 7.5pt; }
+th, td { border: .5px solid #94a3b8; padding: 1px 2px; text-align: center; }
+th { background: #f1f5f9; }
+td.l { text-align: left; }
+tr.sun { background: #fff5f5; }
+tr.sat { background: #eff6ff; }
+tr.over td { color: #dc2626; font-weight: 700; }
+.v { font-size: 8.5pt; padding: 2px 0; }
+.res-OK { color: #16a34a; font-weight: 700; }
+.res-NG { color: #dc2626; font-weight: 700; }
+.res-CHK { color: #b45309; font-weight: 700; }
+.note { font-size: 8pt; color: #64748b; }
+</style></head>
+<body>
+<h1>${esc(title)}</h1>
+<div class="kpi">${kpi}</div>
+<p class="note">飲料別本数：${esc(drinkTotalsText(m))}</p>
+<p class="note">超過日（8.4ユニット超）：${m.over.length ? m.over.map(d => d + '日').join(', ') : 'なし'}　／　記録なし：${m.blankDays.length ? m.blankDays.join(', ') + '日' : 'なし'}</p>
+<h2>日別表</h2>
+${tableHTML(m)}
+<h2>検証結果</h2>
+${verify}
+</body></html>`;
+}
+
+function saveReport() {
+  if (!validNames()) return;
+  download(fileName('飲酒報告', 'html'), reportHTML(model()), 'text/html');
+}
+
+function saveJson() {
+  if (!validNames()) return;
+  const data = { year: Y, month: M, seq: D.seq, ver: D.ver, days: D.days };
+  download(fileName('飲酒データ', 'json'), JSON.stringify(data, null, 2), 'application/json');
+}
+
+function renderDays() {
+  let h = '';
+  for (let d = 1; d <= N; d++) {
+    const r = D.days[d];
+    const dow = WEEK[new Date(Y, M - 1, d).getDay()];
+    const cls = dow === '日' ? 'sun' : dow === '土' ? 'sat' : '';
+    const num = (label, attrs, val) => `<label>${label}<input type="number" ${attrs} value="${esc(val)}"></label>`;
+    h += `<details class="day ${cls}" data-d="${d}">`
+      + `<summary><b>${d}日</b><span>${dow}</span><span class="st blank">記録なし</span><span class="u"></span></summary>`
+      + `<div class="fields">`
+      + `<label class="chk"><input type="checkbox" data-f="dry"${r.dry ? ' checked' : ''}> 休肝日</label>`
+      + `<label class="chk"><input type="checkbox" data-f="out"${r.out ? ' checked' : ''}> 外飲</label>`
+      + num('4000歩カウント', 'inputmode="numeric" data-f="steps"', r.steps)
+      + RATES.map(k => num(k.label + '（杯）', `inputmode="numeric" min="0" step="1" data-drink="${k.key}"`, r.drinks[k.key])).join('')
+      + `<label>水・炭酸<input type="text" data-f="water" value="${esc(r.water)}"></label>`
+      + num('体重 kg', 'inputmode="decimal" step="0.1" data-f="wt"', r.wt)
+      + num('脂肪 %', 'inputmode="decimal" step="0.1" data-f="fat"', r.fat)
+      + num('睡眠 H', 'inputmode="decimal" step="0.1" data-f="slp"', r.slp)
+      + num('手書き合計（ユニット・参考）', 'inputmode="decimal" step="0.01" data-f="paper"', r.paper)
+      + `<label class="wide">気分・行動・出来事<textarea data-f="mood" rows="2">${esc(r.mood)}</textarea></label>`
+      + `</div></details>`;
+  }
+  document.getElementById('days').innerHTML = h;
+}
+
+function refresh() {
+  const m = model();
+  m.days.forEach(x => {
+    const el = document.querySelector(`.day[data-d="${x.d}"]`);
+    if (!el) return;
+    const st = el.querySelector('.st');
+    st.className = 'st ' + x.status;
+    st.textContent = STLABEL[x.status];
+    el.querySelector('.u').innerHTML = x.status === 'blank' ? '<span class="note">—</span>'
+      : x.status === 'invalid' ? '<span class="over">要確認</span>'
+      : `合計 ${fmt2(x.u100)}` + (x.u100 > LIMIT ? ' <span class="over">超過</span>' : '');
+  });
+  document.getElementById('kpi').innerHTML = summaryItems(m).map(([a, b]) => `<div>${esc(a)}<b>${esc(b)}</b></div>`).join('');
+  document.getElementById('detail').innerHTML =
+    `飲料別本数：${esc(drinkTotalsText(m))}<br>`
+    + `超過日：${m.over.length ? m.over.map(d => d + '日').join(', ') : 'なし'}<br>`
+    + `記録なし日：${m.blankDays.length ? m.blankDays.join(', ') + '日' : 'なし'}`;
+  document.getElementById('verify').innerHTML = verifyItems(m)
+    .map(v => `<div class="v"><span class="res-${v.r}">[${RESLABEL[v.r]}]</span> ${esc(v.n)}<br><span class="note">${esc(v.t)}</span></div>`).join('');
+  document.getElementById('tbl').innerHTML = tableHTML(m);
+  document.getElementById('fname').textContent = '報告書ファイル名：' + fileName('飲酒報告', 'html');
+}
+
+function initSel() {
+  const sy = document.getElementById('selY');
+  const sm = document.getElementById('selM');
+  sy.innerHTML = ''; sm.innerHTML = '';
+  for (let y = today.getFullYear() - 2; y <= today.getFullYear() + 2; y++) {
+    sy.insertAdjacentHTML('beforeend', `<option value="${y}"${y === Y ? ' selected' : ''}>${y}年</option>`);
+  }
+  for (let m = 1; m <= 12; m++) {
+    sm.insertAdjacentHTML('beforeend', `<option value="${m}"${m === M ? ' selected' : ''}>${m}月</option>`);
+  }
+}
+
+function applyMonth() {
+  Y = Number(document.getElementById('selY').value);
+  M = Number(document.getElementById('selM').value);
+  document.getElementById('thumbs').innerHTML = '';
+  loadMonth();
+  document.getElementById('seq').value = D.seq;
+  document.getElementById('ver').value = D.ver;
+  renderDays();
+  refresh();
+}
+
+document.getElementById('selY').addEventListener('change', applyMonth);
+document.getElementById('selM').addEventListener('change', applyMonth);
+
+document.getElementById('days').addEventListener('input', e => {
+  const el = e.target;
+  const det = el.closest('.day');
+  if (!det) return;
+  const r = D.days[Number(det.dataset.d)];
+  if (el.dataset.drink) r.drinks[el.dataset.drink] = el.value;
+  else if (el.type === 'checkbox') r[el.dataset.f] = el.checked;
+  else if (el.dataset.f) r[el.dataset.f] = el.value;
+  save();
+  refresh();
+});
+
+document.getElementById('seq').addEventListener('input', e => { D.seq = e.target.value.trim(); save(); refresh(); });
+document.getElementById('ver').addEventListener('input', e => { D.ver = e.target.value.trim(); save(); refresh(); });
+
+function addThumbs(files) {
+  const box = document.getElementById('thumbs');
+  for (const f of files) {
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(f);
+    img.alt = f.name;
+    img.onclick = () => {
+      document.getElementById('viewImg').src = img.src;
+      document.getElementById('viewer').classList.add('on');
+    };
+    box.appendChild(img);
+  }
+}
+document.getElementById('fCam').addEventListener('change', e => addThumbs(e.target.files));
+document.getElementById('fLib').addEventListener('change', e => addThumbs(e.target.files));
+
+initSel();
+loadMonth();
+document.getElementById('seq').value = D.seq;
+document.getElementById('ver').value = D.ver;
+renderDays();
+refresh();
+</script>
+</body>
+</html>
